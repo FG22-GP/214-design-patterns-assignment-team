@@ -1,202 +1,181 @@
-//Using SDL and standard IO
 #include <SDL.h>
-#include <stdio.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <stdio.h>
+#include "RespawningEnemy.h"
 
 
-//Screen dimension constants
-const int SCREEN_WIDTH = 1024;
-const int SCREEN_HEIGHT = 768;
 
-const char* pikachuImagePath{ "img/pikachu.png" };
+const int SCREEN_WIDTH = 1920;
+const int SCREEN_HEIGHT = 1080;
+
+const char* MainCharacterImage = "img/pikachu.png";
+
+
+SDL_Texture* LoadTexture(SDL_Renderer* renderer, const char* imagePath);
+SDL_Texture* RenderText(SDL_Renderer* renderer, TTF_Font* font, const char* text, SDL_Color textColor, int& width, int& height);
 
 int main(int argc, char* args[])
 {
+    SDL_Window* window = nullptr;
+    SDL_Renderer* renderer = nullptr;
 
-	//The window we'll be rendering to
-	SDL_Window* window{};
-	SDL_Renderer* renderer; // the window's rendering surface
+    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+    {
+        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+        return -1;
+    }
 
-	// initialize SDL_Image for image loading
-	int imgFlags = IMG_INIT_PNG;
-	if (!(IMG_Init(imgFlags) & imgFlags))
-	{
-		printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
-	}
+    SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE, &window, &renderer);
+    if (!window)
+    {
+        printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
+        return -1;
+    }
 
-	// initialize SDL_ttf for font loading
-	if (TTF_Init() == -1)
-	{
-		printf("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
-	}
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-	//Start up SDL and create window
-	//Initialize SDL
-	if (SDL_Init(SDL_INIT_VIDEO))
-	{
-		printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-		return -1;
-	}
+    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
+    {
+        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
+        return -1;
+    }
 
-	// Create Window and Renderer
-	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE, &window, &renderer);
-	if (!window)
-	{
-		printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-		return -1;
-	}
+    if (TTF_Init() == -1)
+    {
+        printf("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
+        return -1;
+    }
 
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
-	SDL_RenderSetLogicalSize(renderer, 1024, 768);
+    // Initialize RespawningEnemy and its object pool
+    RespawningEnemy& respawningEnemy = RespawningEnemy::getInstance();
+    respawningEnemy.initializeObjectPool(5); // pool size
 
-	// All data related to pikachu
-	SDL_Texture* pikachu = NULL; // The final optimized image
-	bool pikachuMoveRight = false;
-	int pik_x, pik_y;
-	pik_x = pik_y = 0;
-	int pik_w, pik_h;
-	pik_w = pik_h = 200;
+    SDL_Texture* mainCharacter = LoadTexture(renderer, MainCharacterImage);
+    if (!mainCharacter)
+        return -1;
 
-	//Load image at specified path
-	SDL_Surface* loadedSurface = IMG_Load(pikachuImagePath);
-	if (loadedSurface == NULL)
-	{
-		printf("Unable to load image %s! SDL_image Error: %s\n", pikachuImagePath, IMG_GetError());
-		return -1;
-	}
-	else
-	{
-		//Convert surface to screen format
-		pikachu = SDL_CreateTextureFromSurface(renderer, loadedSurface);
-		if (pikachu == NULL)
-		{
-			printf("Unable to create texture from %s! SDL Error: %s\n", pikachuImagePath, SDL_GetError());
-			return -1;
-		}
+    TTF_Font* font = TTF_OpenFont("font/lazy.ttf", 100);
+    if (!font)
+    {
+        printf("Failed to load lazy font! SDL_ttf Error: %s\n", TTF_GetError());
+        return -1;
+    }
 
-		//Get rid of old loaded surface
-		SDL_FreeSurface(loadedSurface);
-	}
+    int textWidth, textHeight;
+    SDL_Texture* textTexture = RenderText(renderer, font, "Awoooooooooga", { 0xff, 0xff, 0xff }, textWidth, textHeight);
+    if (!textTexture)
+        return -1;
 
-	// load font
-	auto font = TTF_OpenFont("font/lazy.ttf", 100);
-	if (font == NULL)
-	{
-		printf("Failed to load lazy font! SDL_ttf Error: %s\n", TTF_GetError());
-		return -1;
-	}
+    SDL_Event e;
+    bool quit = false;
 
-	// create text from font
-	SDL_Color textColor = { 0xff, 0xff, 0xff };
-	//Render text surface
-	SDL_Texture* textTexture; // The final optimized image
+    int mainCharacter_x = 0, mainCharacter_y = 0;
+    int mainCharacter_w = 200, mainCharacter_h = 200;
+    bool pikachuMoveRight = false;
 
-	// render the text into an unoptimized CPU surface
-	SDL_Surface* textSurface = TTF_RenderText_Solid(font, "The lazy fox, blah blah", textColor);
-	int textWidth, textHeight;
-	if (textSurface == NULL)
-	{
-		printf("Unable to render text surface! SDL_ttf Error: %s\n", TTF_GetError());
-		return -1;
-	}
-	else
-	{
-		// Create texture GPU-stored texture from surface pixels
-		textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-		if (textTexture == NULL)
-		{
-			printf("Unable to create texture from rendered text! SDL Error: %s\n", SDL_GetError());
-			return -1;
-		}
-		// Get image dimensions
-		auto width = textSurface->w;
-		auto height = textSurface->h;
-		textWidth = textSurface->w;
-		textHeight = textSurface->h;
-		//Get rid of old loaded surface
-		SDL_FreeSurface(textSurface);
-	}
+    while (!quit)
+    {
+        
+        while (SDL_PollEvent(&e))
+        {
+            switch (e.type) {
+                case SDL_QUIT:
+                    quit = true;
+                    break;
+                case SDL_KEYDOWN:
+                    
+                    break;
+            }
+        }
+        
 
-	SDL_Event e; bool quit = false;
+        const Uint8* keystate = SDL_GetKeyboardState(NULL);
+        if (keystate[SDL_SCANCODE_UP] && mainCharacter_y > 0)
+            mainCharacter_y--;
+        if (keystate[SDL_SCANCODE_DOWN] && mainCharacter_y < SCREEN_HEIGHT - 200)
+            mainCharacter_y++;
+        if (keystate[SDL_SCANCODE_LEFT] && mainCharacter_x > 0)
+            mainCharacter_x--;
+        if (keystate[SDL_SCANCODE_RIGHT] && mainCharacter_x < SCREEN_WIDTH - 200)
+            mainCharacter_x++;
 
-	// while the user doesn't want to quit
-	while (quit == false)
-	{
-		SDL_GetTicks(); // can be used, to see, how much time in ms has passed since app start
+        SDL_SetRenderDrawColor(renderer, 100, 60, 100, 255);
+        SDL_RenderClear(renderer);
 
+        SDL_Rect characterRect = { mainCharacter_x, mainCharacter_y, mainCharacter_w, mainCharacter_h };
+        SDL_RenderCopy(renderer, mainCharacter, NULL, &characterRect);
 
-		// loop through all pending events from Windows (OS)
-		while (SDL_PollEvent(&e))
-		{
-			// check, if it's an event we want to react to:
-			switch (e.type) {
-				case SDL_QUIT: {
-					quit = true;
-				} break;
+        if (respawningEnemy.checkCollisionWithPlayer(characterRect))
+        {
+            // Handle collision response maybe
+        }
+        
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Set color to red
+        // Render enemies
+        for (const SDL_Rect& enemyRect : respawningEnemy.getObjectPool()) {
+            SDL_RenderDrawRect(renderer, &enemyRect);  // drawing rectangles for enemies
+        }
 
-					// This is an example on how to use input events:
-				case SDL_KEYDOWN: {
-					// input example: if left, then make pikachu move left
-					if (e.key.keysym.sym == SDLK_LEFT) {
-						pikachuMoveRight = false;
-					}
-					// if right, then make pikachu move right
-					if (e.key.keysym.sym == SDLK_RIGHT) {
-						pikachuMoveRight = true;
-					}
-				} break;
-			} 
-		}
+        SDL_Rect textRect = { SCREEN_WIDTH / 2 - textWidth / 2, SCREEN_HEIGHT / 2, textWidth, textHeight };
+        SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
 
-		// This is an example for how to check, whether keys are currently pressed:
-		const Uint8* keystate = SDL_GetKeyboardState(NULL);
-		if (keystate[SDL_SCANCODE_UP])
-		{
-			pik_y--;
-		}
-		if (keystate[SDL_SCANCODE_DOWN])
-		{
-			pik_y++;
-		}
+        SDL_RenderPresent(renderer);
 
-		// our current game logic :)
-		if (pikachuMoveRight) {
-			pik_x++;
-			if (pik_x > 599) pikachuMoveRight = false;
-		}
-		else {
-			pik_x--;
-			if (pik_x < 1) pikachuMoveRight = true;
-		}
-		
-		// clear the screen
-		SDL_SetRenderDrawColor(renderer, 120, 60, 255, 255);
-		SDL_RenderClear(renderer);
-		
-		// render Pikachu
-		SDL_Rect targetRectangle{
-			pik_x,
-			pik_y,
-			pik_w,
-			pik_h
-		};
-		SDL_RenderCopy(renderer, pikachu, NULL, &targetRectangle);
+        SDL_Delay(0);
+    }
 
-		// render the text
-		targetRectangle = SDL_Rect{
-			500,
-			500,
-			textWidth,
-			textHeight
-		};
-		SDL_RenderCopy(renderer, textTexture, NULL, &targetRectangle);
+    SDL_DestroyTexture(mainCharacter);
+    SDL_DestroyTexture(textTexture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    TTF_CloseFont(font);
+    TTF_Quit();
+    IMG_Quit();
+    SDL_Quit();
 
-		// present screen (switch buffers)
-		SDL_RenderPresent(renderer);
+    return 0;
+}
 
-		SDL_Delay(0); // can be used to wait for a certain amount of ms
-	}
+SDL_Texture* LoadTexture(SDL_Renderer* renderer, const char* imagePath)
+{
+    SDL_Texture* texture = nullptr;
+    SDL_Surface* loadedSurface = IMG_Load(imagePath);
+    if (loadedSurface == NULL)
+    {
+        printf("Unable to load image %s! SDL_image Error: %s\n", imagePath, IMG_GetError());
+    }
+    else
+    {
+        texture = SDL_CreateTextureFromSurface(renderer, loadedSurface);
+        if (texture == NULL)
+        {
+            printf("Unable to create texture from %s! SDL Error: %s\n", imagePath, SDL_GetError());
+        }
+        SDL_FreeSurface(loadedSurface);
+    }
+    return texture;
+}
 
-	return 0;
+SDL_Texture* RenderText(SDL_Renderer* renderer, TTF_Font* font, const char* text, SDL_Color textColor, int& width, int& height)
+{
+    SDL_Texture* texture = nullptr;
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, text, textColor);
+    if (textSurface == NULL)
+    {
+        printf("Unable to render text surface! SDL_ttf Error: %s\n", TTF_GetError());
+    }
+    else
+    {
+        texture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        if (texture == NULL)
+        {
+            printf("Unable to create texture from rendered text! SDL Error: %s\n", SDL_GetError());
+        }
+        width = textSurface->w;
+        height = textSurface->h;
+        SDL_FreeSurface(textSurface);
+    }
+    return texture;
 }
