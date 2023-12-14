@@ -2,6 +2,8 @@
 #include <SDL_image.h>
 #include <SDL_ttf.h>
 #include <stdio.h>
+#include <string>
+
 #include "RespawningEnemy.h"
 
 
@@ -9,7 +11,9 @@
 const int SCREEN_WIDTH = 1920;
 const int SCREEN_HEIGHT = 1080;
 
-const char* MainCharacterImage = "img/pikachu.png";
+const char* MainCharacterImage = "img/Cube.png";
+
+int score = 0;
 
 
 SDL_Texture* LoadTexture(SDL_Renderer* renderer, const char* imagePath);
@@ -64,7 +68,8 @@ int main(int argc, char* args[])
     }
 
     int textWidth, textHeight;
-    SDL_Texture* textTexture = RenderText(renderer, font, "Awoooooooooga", { 0xff, 0xff, 0xff }, textWidth, textHeight);
+    SDL_Texture* textTexture = RenderText(renderer, font, "Tutch the squares to increase score" , { 0xff, 0xff, 0xff }, textWidth, textHeight);
+    
     if (!textTexture)
         return -1;
 
@@ -74,6 +79,8 @@ int main(int argc, char* args[])
     int mainCharacter_x = 0, mainCharacter_y = 0;
     int mainCharacter_w = 200, mainCharacter_h = 200;
     bool pikachuMoveRight = false;
+
+    
 
     while (!quit)
     {
@@ -94,11 +101,11 @@ int main(int argc, char* args[])
         const Uint8* keystate = SDL_GetKeyboardState(NULL);
         if (keystate[SDL_SCANCODE_UP] && mainCharacter_y > 0)
             mainCharacter_y--;
-        if (keystate[SDL_SCANCODE_DOWN] && mainCharacter_y < SCREEN_HEIGHT - 200)
+        if (keystate[SDL_SCANCODE_DOWN] && mainCharacter_y < SCREEN_HEIGHT - mainCharacter_h)
             mainCharacter_y++;
         if (keystate[SDL_SCANCODE_LEFT] && mainCharacter_x > 0)
             mainCharacter_x--;
-        if (keystate[SDL_SCANCODE_RIGHT] && mainCharacter_x < SCREEN_WIDTH - 200)
+        if (keystate[SDL_SCANCODE_RIGHT] && mainCharacter_x < SCREEN_WIDTH - mainCharacter_w)
             mainCharacter_x++;
 
         SDL_SetRenderDrawColor(renderer, 100, 60, 100, 255);
@@ -109,9 +116,12 @@ int main(int argc, char* args[])
 
         if (respawningEnemy.checkCollisionWithPlayer(characterRect))
         {
-            // Handle collision response maybe
+            score++;
+
+            SDL_DestroyTexture(textTexture);
+            textTexture = RenderText(renderer, font, (std::string("score: ") + std::to_string(score)).c_str(), { 0xff, 0xff, 0xff }, textWidth, textHeight);
         }
-        
+
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Set color to red
         // Render enemies
         for (const SDL_Rect& enemyRect : respawningEnemy.getObjectPool()) {
@@ -126,6 +136,8 @@ int main(int argc, char* args[])
         SDL_Delay(0);
     }
 
+    
+
     SDL_DestroyTexture(mainCharacter);
     SDL_DestroyTexture(textTexture);
     SDL_DestroyRenderer(renderer);
@@ -134,6 +146,8 @@ int main(int argc, char* args[])
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
+
+    
 
     return 0;
 }
