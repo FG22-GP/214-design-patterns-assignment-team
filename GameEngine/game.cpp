@@ -52,6 +52,35 @@ int main(int argc, char* args[])
         return -1;
     }
 
+    // Open and initialize audio
+    if (SDL_Init(SDL_INIT_AUDIO) < 0)
+    {
+        printf("SDL could not initialize audio! SDL_Error: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    const int numAudioDevices = 5; // Number of audio devices in the pool
+    SDL_AudioDeviceID audioDevices[numAudioDevices];
+    
+    // Load a sound effect
+    SDL_AudioSpec wavSpec;
+    Uint32 wavLength;
+    Uint8* wavBuffer;
+
+    if (SDL_LoadWAV("wav/score_sound.wav", &wavSpec, &wavBuffer, &wavLength) == nullptr)
+    {
+        printf("Failed to load sound effect! SDL_Error: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    // Open audio device
+    SDL_AudioDeviceID audioDevice = SDL_OpenAudioDevice(nullptr, 0, &wavSpec, nullptr, 0);
+    if (audioDevice == 0)
+    {
+        printf("Failed to open audio device! SDL_Error: %s\n", SDL_GetError());
+        return -1;
+    }
+
     // Initialize RespawningEnemy and its object pool
     RespawningEnemy& respawningEnemy = RespawningEnemy::getInstance();
     respawningEnemy.initializeObjectPool(5); // pool size
@@ -68,7 +97,7 @@ int main(int argc, char* args[])
     }
 
     int textWidth, textHeight;
-    SDL_Texture* textTexture = RenderText(renderer, font, "Tutch the squares to increase score" , { 0xff, 0xff, 0xff }, textWidth, textHeight);
+    SDL_Texture* textTexture = RenderText(renderer, font,"Tutch the squares to increase score", { 0xff, 0xff, 0xff }, textWidth, textHeight);
     
     if (!textTexture)
         return -1;
@@ -120,6 +149,10 @@ int main(int argc, char* args[])
 
             SDL_DestroyTexture(textTexture);
             textTexture = RenderText(renderer, font, (std::string("score: ") + std::to_string(score)).c_str(), { 0xff, 0xff, 0xff }, textWidth, textHeight);
+            //playsound
+            SDL_ClearQueuedAudio(audioDevice);
+            SDL_QueueAudio(audioDevice, wavBuffer, wavLength);
+            SDL_PauseAudioDevice(audioDevice, 0);
         }
 
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Set color to red
@@ -137,7 +170,9 @@ int main(int argc, char* args[])
     }
 
     
-
+    SDL_FreeWAV(wavBuffer);
+    SDL_CloseAudioDevice(audioDevice);
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
     SDL_DestroyTexture(mainCharacter);
     SDL_DestroyTexture(textTexture);
     SDL_DestroyRenderer(renderer);
